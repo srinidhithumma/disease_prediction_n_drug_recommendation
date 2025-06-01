@@ -1,0 +1,18 @@
+Predicted Disease: Bronchial Asthma
+
+### Precautions ###
+No precautions available
+
+### Medications ###
+Disease
+Medication
+
+### Recommended Diet ###
+No diet recommendations available
+
+### Workout ###
+Unnamed: 0.1                     0
+Unnamed: 0                       0
+disease           Fungal infection
+workout         Avoid sugary foods
+Name: 0, dtype: object

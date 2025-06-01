@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your History</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .history-container {
+            width: 80%;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .history-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            display: flex; /* Use flexbox for layout */
+            justify-content: space-between; /* Space items evenly */
+            align-items: center; /* Vertically center items */
+        }
+        .history-item-content {
+            flex: 1; /* Allow content to take up available space */
+            margin-right: 10px; /* Add some margin to the content */
+        }
+        .delete-button {
+            /* No need to specify width, adjust padding as needed */
+            padding: 5px 10px;
+        }
+
+        .back-button {
+            display: block;
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="history-container">
+        <h2 class="mb-4">Your Activity History</h2>
+        {% if history %}
+            {% for item in history %}
+                <div class="history-item">
+                    <div class="history-item-content">
+                        <p><strong>Timestamp:</strong> {{ item.timestamp }}</p>
+                        {% if item.symptoms_input %}
+                            <p><strong>Symptoms Input:</strong> {{ item.symptoms_input }}</p>
+                            <p><strong>Corrected Symptoms:</strong> {{ item.corrected_symptoms }}</p>
+                            <p><strong>Predicted Disease:</strong> {{ item.predicted_disease }}</p>
+                        {% endif %}
+                        {% if item.activity_type == 'download_results' %}
+                            <p><strong>Activity:</strong> Downloaded results for {{ item.predicted_disease }}</p>
+                        {% endif %}
+                        {% if item.activity_type == 'logout' %}
+                            <p><strong>Activity:</strong> Logged out</p>
+                        {% endif %}
+                        {% if item.feedback %}
+                            <p><strong>Feedback Submitted:</strong> {{ item.feedback }}</p>
+                        {% endif %}
+                    </div>
+                    <form action="/delete_history/{{ item._id|string }}" method="post">
+                        <button type="submit" class="btn btn-danger delete-button">Delete</button>
+                    </form>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p>No activity history available.</p>
+        {% endif %}
+        <div class="back-button">
+            <a href="/predict" class="btn btn-secondary">Back to Prediction</a>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

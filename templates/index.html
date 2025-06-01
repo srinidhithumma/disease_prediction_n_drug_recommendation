@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Smart System for Disease Predition and Drug Recommendation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css" rel="stylesheet" />
+    <style>
+        body {
+            background-image: url('static/bgCover.jpg');
+            background-size: cover;
+            background-position: center;
+            background-color: rgba(0, 0, 0, 0.15);
+            background-blend-mode: overlay;
+        }
+        .logo {
+            width: 100%;
+            height: 50px;
+            color: white;
+            margin-top: 0;
+            margin-bottom: 0;
+            margin-left: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .myimg {
+            width: 50px;
+            height: 50px;
+            margin-right: 10px;
+            padding: 5px;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 40px;
+        }
+        .title-symptoms {
+            color: black;
+            margin-bottom: 10px;
+            margin-left: 3px;
+        }
+        .message-text {
+            color: red;
+        }
+        .btn {
+            background-color: rgba(16, 4, 95, 0.7);
+            backdrop-filter: blur(5px);
+            border: none;
+            border-radius: 8px;
+            padding: 10px;
+            color: white;
+        }
+        .btn:hover {
+            background-color: rgba(16, 4, 95, 0.4);
+            color: white;
+        }
+        .footer {
+            background-color: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            padding: 10px;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+        }
+        .symptom-select {
+            width: 100%; /* Make the dropdown full width */
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark" style="background-color: rgba(0, 0, 0, 0.35); background-blend-mode: overlay; background-image: linear-gradient(to bottom, #10045F, #3424A1); box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.15);">
+        <div class="container-fluid">
+            <div class="logo">
+                <img class="myimg" src="static/img.png" alt="Logo">
+                <h5 class="titleName">Smart System for Disease Prediction and Drug Recommendation</h5>
+            </div>
+            <div class="d-flex gap-3">
+                <a class="navbar-brand" href="" id="resetButton">Reset</a>
+                <a class="navbar-brand" href="/history">History</a>
+                <a class="navbar-brand" href="/logout">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4 mt-4 bg-glass p-4 rounded">
+        <form action="/predict" method="post">
+            <div class="form-group">
+                <label for="symptoms" class="title-symptoms" style="margin-bottom:10px" >Select your symptoms:</label>
+                <select class="form-control symptom-select" id="symptoms" name="symptoms" multiple="multiple">
+                    {% for symptom in all_symptoms %}
+                        <option value="{{ symptom }}">{{ symptom.replace('_', ' ').title() }}</option>
+                    {% endfor %}
+                </select>
+                <small class="form-text text-muted">Select multiple symptoms.</small>
+            </div>
+            <br>
+            {% if message %}
+                <p class="message-text">{{ message }}</p>
+            {% endif %}
+            <br>
+            <div class="d-flex justify-content-center">
+                <button type="submit" class="btn btn-danger btn-lg" style="width: 30%; padding: 14px; margin-bottom: 5px;">Predict</button>
+            </div>
+        </form>
+    </div>
+
+    {% if predicted_disease %}
+    <div class="container my-4 mt-4 p-3 rounded" style="background-color: rgba(255,255,255,0.3); backdrop-filter: blur(10px);">
+        <p class="text-danger fw-bold text-center">
+            ⚠️ Disclaimer: The predicted results may not be 100% accurate. Please consult a medical professional for proper diagnosis.<br>
+            You can help us improve by providing your valuable below.
+        </p>
+    </div>
+        <h4 class="text-center my-4 mt-4">Predicted Results:</h4>
+        <div class="container my-4 mt-4">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <h6>Showing predictions for {{symptoms}}</h6>
+                    </tr>
+                </thead>
+                <thead>
+                    <tr>
+                        <th scope="col">Disease</th>
+                        <th scope="col">{{predicted_disease}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th>Description</th>
+                        <td>{{ dis_des }}</td>
+                    </tr>
+                    <tr>
+                        <th>Precautions</th>
+                        <td>
+                            <ul>
+                                {% for i in my_precautions %}
+                                    <li>{{ i }}</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Medications</th>
+                        <td>
+                            <ul>
+                                {% for i in medications %}
+                                    <li>{{ i }}</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Workout</th>
+                        <td>
+                            <ul>
+                                {% for i in workout %}
+                                    <li>{{ i }}</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Diet</th>
+                        <td>
+                            <ul>
+                                {% for i in my_diet %}
+                                    <li>{{ i }}</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <form action="/download" method="post">
+                <input type="hidden" name="predicted_disease" value="{{ predicted_disease }}">
+                <input type="hidden" name="dis_des" value="{{ dis_des }}">
+                {% for i in my_precautions %}
+                    <input type="hidden" name="my_precautions" value="{{ i }}">
+                {% endfor %}
+                {% for i in medications %}
+                    <input type="hidden" name="medications" value="{{ i }}">
+                {% endfor %}
+                {% for i in my_diet %}
+                    <input type="hidden" name="my_diet" value="{{ i }}">
+                {% endfor %}
+                {% for i in workout %}
+                    <input type="hidden" name="workout" value="{{ i }}">
+                {% endfor %}
+                <button type="submit" class="btn btn-success mt-3 w-100">Download Results</button>
+            </form>
+            <a href="/feedback" class="btn btn-info mt-3 w-100">Give Feedback</a>
+        </div>
+    {% endif %}
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#symptoms').select2({
+                placeholder: "Select your symptoms",
+                allowClear: true // Option to clear selection
+            });
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZtQ2HpUmdylmfANSv+joQlMYmzTaOYr0IaHlIBja" crossorigin="anonymous"></script>
+</body>
+</html>
