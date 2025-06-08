@@ -68,7 +68,47 @@
             flex-direction: row;
         }
         .symptom-select {
-            width: 100%; /* Make the dropdown full width */
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .symptom-row {
+            margin-bottom: 20px;
+        }
+        .symptom-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        .select2-container--default .select2-selection--single {
+            height: 38px;
+            border: 1px solid #ced4da;
+            border-radius: 0.375rem;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 36px;
+            padding-left: 12px;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 36px;
+        }
+        .loading-text {
+            font-style: italic;
+            color: #666;
+        }
+        .prediction-source {
+            background-color: rgba(40, 167, 69, 0.1);
+            border: 1px solid #28a745;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        .csv-prediction {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .ml-prediction {
+            color: #007bff;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -88,15 +128,47 @@
     </nav>
 
     <div class="container my-4 mt-4 bg-glass p-4 rounded">
-        <form action="/predict" method="post">
+        <form action="/predict" method="post" id="symptomForm">
             <div class="form-group">
-                <label for="symptoms" class="title-symptoms" style="margin-bottom:10px" >Select your symptoms:</label>
-                <select class="form-control symptom-select" id="symptoms" name="symptoms" multiple="multiple">
-                    {% for symptom in all_symptoms %}
-                        <option value="{{ symptom }}">{{ symptom.replace('_', ' ').title() }}</option>
-                    {% endfor %}
-                </select>
-                <small class="form-text text-muted">Select multiple symptoms.</small>
+                <label class="title-symptoms" style="margin-bottom:20px">Select your symptoms:</label>
+                
+                <!-- Primary Symptom -->
+                <div class="symptom-row">
+                    <div class="symptom-label">Primary Symptom:</div>
+                    <select class="form-control symptom-select" id="primary_symptom" name="primary_symptom">
+                        <option value="">-- Select Symptom 1 --</option>
+                        {% for symptom in primary_symptoms %}
+                            <option value="{{ symptom }}" {% if selected_primary == symptom %}selected{% endif %}>
+                                {{ symptom.replace('_', ' ').title() }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Secondary Symptom -->
+                <div class="symptom-row">
+                    <div class="symptom-label">Secondary Symptom:</div>
+                    <select class="form-control symptom-select" id="secondary_symptom" name="secondary_symptom" disabled>
+                        <option value="">-- Select Symptom 2--</option>
+                    </select>
+                </div>
+
+                <!-- Tertiary Symptom -->
+                <div class="symptom-row">
+                    <div class="symptom-label">Tertiary Symptom:</div>
+                    <select class="form-control symptom-select" id="tertiary_symptom" name="tertiary_symptom" disabled>
+                        <option value="">-- Select Symptom 3 --</option>
+                    </select>
+                </div>
+
+                <!-- Quaternary Symptom -->
+                <div class="symptom-row">
+                    <div class="symptom-label">Fourth Symptom:</div>
+                    <select class="form-control symptom-select" id="quaternary_symptom" name="quaternary_symptom" disabled>
+                        <option value="">-- Select Symptom 4 --</option>
+                    </select>
+                </div>
+
             </div>
             <br>
             {% if message %}
@@ -112,99 +184,229 @@
     {% if predicted_disease %}
     <div class="container my-4 mt-4 p-3 rounded" style="background-color: rgba(255,255,255,0.3); backdrop-filter: blur(10px);">
         <p class="text-danger fw-bold text-center">
-            ⚠️ Disclaimer: The predicted results may not be 100% accurate. Please consult a medical professional for proper diagnosis.<br>
-            You can help us improve by providing your valuable below.
+            ⚠ Disclaimer: The predicted results may not be 100% accurate. Please consult a medical professional for proper diagnosis.<br>
+            You can help us improve by providing your valuable feedback.
         </p>
     </div>
-        <h4 class="text-center my-4 mt-4">Predicted Results:</h4>
-        <div class="container my-4 mt-4">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <h6>Showing predictions for {{symptoms}}</h6>
-                    </tr>
-                </thead>
-                <thead>
-                    <tr>
-                        <th scope="col">Disease</th>
-                        <th scope="col">{{predicted_disease}}</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <th>Description</th>
-                        <td>{{ dis_des }}</td>
-                    </tr>
-                    <tr>
-                        <th>Precautions</th>
-                        <td>
-                            <ul>
-                                {% for i in my_precautions %}
-                                    <li>{{ i }}</li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Medications</th>
-                        <td>
-                            <ul>
-                                {% for i in medications %}
-                                    <li>{{ i }}</li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Workout</th>
-                        <td>
-                            <ul>
-                                {% for i in workout %}
-                                    <li>{{ i }}</li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>Diet</th>
-                        <td>
-                            <ul>
-                                {% for i in my_diet %}
-                                    <li>{{ i }}</li>
-                                {% endfor %}
-                            </ul>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            <form action="/download" method="post">
-                <input type="hidden" name="predicted_disease" value="{{ predicted_disease }}">
-                <input type="hidden" name="dis_des" value="{{ dis_des }}">
-                {% for i in my_precautions %}
-                    <input type="hidden" name="my_precautions" value="{{ i }}">
+
+    <!-- Prediction Source Information -->
+    <div class="container my-4 mt-4">
+        <div class="prediction-source">
+            {% if possible_diseases %}
+                <p><strong>Possible diseases:</strong> 
+                {% for disease in possible_diseases %}
+                    <span class="csv-prediction">{{ disease }}</span>{% if not loop.last %}, {% endif %}
                 {% endfor %}
-                {% for i in medications %}
-                    <input type="hidden" name="medications" value="{{ i }}">
-                {% endfor %}
-                {% for i in my_diet %}
-                    <input type="hidden" name="my_diet" value="{{ i }}">
-                {% endfor %}
-                {% for i in workout %}
-                    <input type="hidden" name="workout" value="{{ i }}">
-                {% endfor %}
-                <button type="submit" class="btn btn-success mt-3 w-100">Download Results</button>
-            </form>
-            <a href="/feedback" class="btn btn-info mt-3 w-100">Give Feedback</a>
+                </p>
+            {% endif %}
         </div>
+    </div>
+
+    <h4 class="text-center my-4 mt-4">Predicted Results:</h4>
+    <div class="container my-4 mt-4">
+        <table class="table">
+            <thead>
+                <tr>
+                    <h6>Showing predictions for {{symptoms}}</h6>
+                </tr>
+            </thead>
+            <thead>
+                <tr>
+                    <th scope="col">Disease</th>
+                    <th scope="col">{{predicted_disease}}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Description</th>
+                    <td>{{ dis_des }}</td>
+                </tr>
+                <tr>
+                    <th>Precautions</th>
+                    <td>
+                        <ul>
+                            {% for i in my_precautions %}
+                                <li>{{ i }}</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Medications</th>
+                    <td>
+                        <ul>
+                            {% for i in medications %}
+                                <li>{{ i }}</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Workout</th>
+                    <td>
+                        <ul>
+                            {% for i in workout %}
+                                <li>{{ i }}</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Diet</th>
+                    <td>
+                        <ul>
+                            {% for i in my_diet %}
+                                <li>{{ i }}</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <form action="/download" method="post">
+            <input type="hidden" name="predicted_disease" value="{{ predicted_disease }}">
+            <input type="hidden" name="prediction_source" value="{{ prediction_source }}">
+            <input type="hidden" name="dis_des" value="{{ dis_des }}">
+            {% for i in my_precautions %}
+                <input type="hidden" name="my_precautions" value="{{ i }}">
+            {% endfor %}
+            {% for i in medications %}
+                <input type="hidden" name="medications" value="{{ i }}">
+            {% endfor %}
+            {% for i in my_diet %}
+                <input type="hidden" name="my_diet" value="{{ i }}">
+            {% endfor %}
+            {% for i in workout %}
+                <input type="hidden" name="workout" value="{{ i }}">
+            {% endfor %}
+            <button type="submit" class="btn btn-success mt-3 w-100">Download Results</button>
+        </form>
+        <a href="/feedback" class="btn btn-info mt-3 w-100">Give Feedback</a>
+    </div>
     {% endif %}
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
     <script>
         $(document).ready(function() {
-            $('#symptoms').select2({
-                placeholder: "Select your symptoms",
-                allowClear: true // Option to clear selection
+            // Initialize Select2
+            $('.symptom-select').select2({
+                placeholder: function(){
+                    return $(this).data('placeholder');
+                },
+                allowClear: true
+            });
+
+            // Handle primary symptom change
+            $('#primary_symptom').change(function() {
+                const primarySymptom = $(this).val();
+                
+                // Clear and disable subsequent dropdowns
+                $('#secondary_symptom, #tertiary_symptom, #quaternary_symptom').val('').trigger('change').prop('disabled', true);
+                
+                if (primarySymptom) {
+                    // Get secondary symptoms
+                    $.ajax({
+                        url: '/get_secondary_symptoms',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({primary_symptom: primarySymptom}),
+                        success: function(data) {
+                            const secondarySelect = $('#secondary_symptom');
+                            secondarySelect.empty().append('<option value="">-- Select Secondary Symptom --</option>');
+                            
+                            data.forEach(function(symptom) {
+                                secondarySelect.append($('<option>', {
+                                    value: symptom,
+                                    text: symptom.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                }));
+                            });
+                            
+                            secondarySelect.prop('disabled', false);
+                            console.log('Secondary symptoms loaded:', data);
+                        }
+                    });
+                }
+            });
+
+            // Handle secondary symptom change
+            $('#secondary_symptom').change(function() {
+                const primarySymptom = $('#primary_symptom').val();
+                const secondarySymptom = $(this).val();
+                
+                // Clear and disable subsequent dropdowns
+                $('#tertiary_symptom, #quaternary_symptom').val('').trigger('change').prop('disabled', true);
+                
+                if (primarySymptom && secondarySymptom) {
+                    // Get tertiary symptoms
+                    $.ajax({
+                        url: '/get_tertiary_symptoms',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            primary_symptom: primarySymptom,
+                            secondary_symptom: secondarySymptom
+                        }),
+                        success: function(data) {
+                            const tertiarySelect = $('#tertiary_symptom');
+                            tertiarySelect.empty().append('<option value="">-- Select Tertiary Symptom --</option>');
+                            
+                            data.forEach(function(symptom) {
+                                tertiarySelect.append($('<option>', {
+                                    value: symptom,
+                                    text: symptom.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                }));
+                            });
+                            
+                            tertiarySelect.prop('disabled', false);
+                            console.log('Tertiary symptoms loaded:', data);
+                        }
+                    });
+                }
+            });
+
+            // Handle tertiary symptom change
+            $('#tertiary_symptom').change(function() {
+                const primarySymptom = $('#primary_symptom').val();
+                const secondarySymptom = $('#secondary_symptom').val();
+                const tertiarySymptom = $(this).val();
+                
+                // Clear and disable quaternary dropdown
+                $('#quaternary_symptom').val('').trigger('change').prop('disabled', true);
+                
+                if (primarySymptom && secondarySymptom && tertiarySymptom) {
+                    // Get quaternary symptoms
+                    $.ajax({
+                        url: '/get_quaternary_symptoms',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            primary_symptom: primarySymptom,
+                            secondary_symptom: secondarySymptom,
+                            tertiary_symptom: tertiarySymptom
+                        }),
+                        success: function(data) {
+                            const quaternarySelect = $('#quaternary_symptom');
+                            quaternarySelect.empty().append('<option value="">-- Select Fourth Symptom --</option>');
+                            
+                            data.forEach(function(symptom) {
+                                quaternarySelect.append($('<option>', {
+                                    value: symptom,
+                                    text: symptom.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                                }));
+                            });
+                            
+                            quaternarySelect.prop('disabled', false);
+                            console.log('Quaternary symptoms loaded:', data);
+                        }
+                    });
+                }
+            });
+
+            // Reset button functionality
+            $('#resetButton').click(function(e) {
+                e.preventDefault();
+                location.reload();
             });
         });
     </script>

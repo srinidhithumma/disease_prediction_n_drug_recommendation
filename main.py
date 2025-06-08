@@ -11,17 +11,18 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 import os
+
 app = Flask(__name__)
-# app.secret_key = "d7f3b6017b939599d88314e418b1ccbc"  # Important for session management
-app.secret_key=os.urandom(24).hex()
+app.secret_key = os.urandom(24).hex()
+
 # MongoDB setup
-client = pymongo.MongoClient("mongodb://localhost:27017")  # Replace with your MongoDB connection string
+client = pymongo.MongoClient("mongodb+srv://sitanagapavani65:puppy1334@cluster0.buv6uml.mongodb.net/")
 db = client["medicine_recommendation"]
 users_collection = db["users"]
 feedback_collection = db["feedback"]
-activity_collection = db["user_activity"] # New collection for user activity
+activity_collection = db["user_activity"]
 
-# Loading the datasets from Kaggle website
+# Loading the datasets
 sym_des = pd.read_csv("kaggle_dataset/symptoms_df.csv")
 precautions = pd.read_csv("kaggle_dataset/precautions_df.csv")
 workout = pd.read_csv("kaggle_dataset/workout_df.csv")
@@ -29,9 +30,13 @@ description = pd.read_csv("kaggle_dataset/description.csv")
 medications = pd.read_csv('kaggle_dataset/medications.csv')
 diets = pd.read_csv("kaggle_dataset/diets.csv")
 
+# Load the symptom relationships CSV (your cascading symptoms CSV)
+symptom_relationships = pd.read_csv("kaggle_dataset/symptoms_df.csv")
+
+# Load the trained model
 Rf = pickle.load(open('model/RandomForest.pkl', 'rb'))
 
-# Here we make a dictionary of symptoms and diseases and preprocess it
+# Symptoms and diseases dictionaries
 symptoms_list = {'itching': 0, 'skin_rash': 1, 'nodal_skin_eruptions': 2, 'continuous_sneezing': 3, 'shivering': 4,
                  'chills': 5, 'joint_pain': 6, 'stomach_pain': 7, 'acidity': 8, 'ulcers_on_tongue': 9,
                  'muscle_wasting': 10, 'vomiting': 11, 'burning_micturition': 12, 'spotting_ urination': 13,
@@ -58,7 +63,7 @@ symptoms_list = {'itching': 0, 'skin_rash': 1, 'nodal_skin_eruptions': 2, 'conti
                  'internal_itching': 93, 'toxic_look_(typhos)': 94, 'depression': 95, 'irritability': 96,
                  'muscle_pain': 97, 'altered_sensorium': 98, 'red_spots_over_body': 99, 'belly_pain': 100,
                  'abnormal_menstruation': 101, 'dischromic _patches': 102, 'watering_from_eyes': 103,
-                 'increased_appetite': 104, 'polyuria': 105, 'family_history': 106, 'mucoid_sputum':107,
+                 'increased_appetite': 104, 'polyuria': 105, 'family_history': 106, 'mucoid_sputum': 107,
                  'rusty_sputum': 108, 'lack_of_concentration': 109, 'visual_disturbances': 110,
                  'receiving_blood_transfusion': 111, 'receiving_unsterile_injections': 112, 'coma': 113,
                  'stomach_bleeding': 114, 'distention_of_abdomen': 115, 'history_of_alcohol_consumption': 116,
@@ -66,6 +71,7 @@ symptoms_list = {'itching': 0, 'skin_rash': 1, 'nodal_skin_eruptions': 2, 'conti
                  'painful_walking': 121, 'pus_filled_pimples': 122, 'blackheads': 123, 'scurring': 124,
                  'skin_peeling': 125, 'silver_like_dusting': 126, 'small_dents_in_nails': 127,
                  'inflammatory_nails': 128, 'blister': 129, 'red_sore_around_nose': 130, 'yellow_crust_ooze': 131}
+
 diseases_list = {15: 'Fungal infection', 4: 'Allergy', 16: 'GERD', 9: 'Chronic cholestasis', 14: 'Drug Reaction',
                  33: 'Peptic ulcer diseae', 1: 'AIDS', 12: 'Diabetes ', 17: 'Gastroenteritis', 6: 'Bronchial Asthma',
                  23: 'Hypertension ', 30: 'Migraine', 7: 'Cervical spondylosis', 32: 'Paralysis (brain hemorrhage)',
@@ -78,9 +84,157 @@ diseases_list = {15: 'Fungal infection', 4: 'Allergy', 16: 'GERD', 9: 'Chronic c
 
 symptoms_list_processed = {symptom.replace('_', ' ').lower(): value for symptom, value in symptoms_list.items()}
 
+# New functions for cross-column cascading symptoms
+def clean_symptom(symptom):
+    """Clean and normalize symptom names"""
+    if pd.isna(symptom) or symptom == '':
+        return None
+    return symptom.strip().replace(' ', '_').lower()
 
-# Here we created a function (information) to extract information from all the datasets
+def get_primary_symptoms():
+    """Get all unique symptoms from all columns"""
+    all_symptoms = []
+    for col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+        symptoms = symptom_relationships[col].dropna().unique()
+        all_symptoms.extend(symptoms)
+    
+    cleaned_symptoms = [clean_symptom(s) for s in all_symptoms if clean_symptom(s)]
+    return sorted(list(set(cleaned_symptoms)))
+
+def get_secondary_symptoms(primary_symptom):
+    """Get available symptoms based on primary symptom selection from any column"""
+    if not primary_symptom:
+        return []
+    
+    secondary_symptoms = []
+    
+    # Find all rows where the primary symptom appears in ANY column
+    for col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+        try:
+            matching_rows = symptom_relationships[
+                symptom_relationships[col].astype(str).str.strip().str.replace(' ', '_').str.lower() == primary_symptom.lower()
+            ]
+            
+            # Get symptoms from OTHER columns in these matching rows
+            for other_col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+                if other_col != col:  # Don't include the same column
+                    symptoms = matching_rows[other_col].dropna().unique()
+                    secondary_symptoms.extend(symptoms)
+        except:
+            continue
+    
+    cleaned_symptoms = [clean_symptom(s) for s in secondary_symptoms if clean_symptom(s)]
+    # Remove the primary symptom from secondary options
+    cleaned_symptoms = [s for s in cleaned_symptoms if s != primary_symptom.lower()]
+    return sorted(list(set(cleaned_symptoms)))
+
+def get_tertiary_symptoms(primary_symptom, secondary_symptom):
+    """Get available symptoms based on first two selections"""
+    if not primary_symptom or not secondary_symptom:
+        return []
+    
+    tertiary_symptoms = []
+    selected_symptoms = [primary_symptom.lower(), secondary_symptom.lower()]
+    
+    # Find rows that contain BOTH selected symptoms in ANY combination of columns
+    for index, row in symptom_relationships.iterrows():
+        row_symptoms = []
+        for col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+            if pd.notna(row[col]):
+                cleaned = clean_symptom(row[col])
+                if cleaned:
+                    row_symptoms.append(cleaned)
+        
+        # Check if this row contains both selected symptoms
+        if all(symptom in row_symptoms for symptom in selected_symptoms):
+            # Add the remaining symptoms from this row
+            for symptom in row_symptoms:
+                if symptom not in selected_symptoms:
+                    tertiary_symptoms.append(symptom)
+    
+    return sorted(list(set(tertiary_symptoms)))
+
+def get_quaternary_symptoms(primary_symptom, secondary_symptom, tertiary_symptom):
+    """Get available symptoms based on first three selections"""
+    if not primary_symptom or not secondary_symptom or not tertiary_symptom:
+        return []
+    
+    quaternary_symptoms = []
+    selected_symptoms = [primary_symptom.lower(), secondary_symptom.lower(), tertiary_symptom.lower()]
+    
+    # Find rows that contain ALL THREE selected symptoms in ANY combination of columns
+    for index, row in symptom_relationships.iterrows():
+        row_symptoms = []
+        for col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+            if pd.notna(row[col]):
+                cleaned = clean_symptom(row[col])
+                if cleaned:
+                    row_symptoms.append(cleaned)
+        
+        # Check if this row contains all three selected symptoms
+        if all(symptom in row_symptoms for symptom in selected_symptoms):
+            # Add the remaining symptom from this row (should be only one left)
+            for symptom in row_symptoms:
+                if symptom not in selected_symptoms:
+                    quaternary_symptoms.append(symptom)
+    
+    return sorted(list(set(quaternary_symptoms)))
+
+def get_best_matching_disease(selected_symptoms):
+    """Get the best matching disease from CSV based on selected symptoms"""
+    if not selected_symptoms:
+        return None
+    
+    selected_symptoms_lower = [s.lower() for s in selected_symptoms]
+    best_match = None
+    max_matches = 0
+    
+    # Find the row with the most matching symptoms
+    for index, row in symptom_relationships.iterrows():
+        row_symptoms = []
+        for col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+            if pd.notna(row[col]):
+                cleaned = clean_symptom(row[col])
+                if cleaned:
+                    row_symptoms.append(cleaned)
+        
+        # Count how many selected symptoms match this row
+        matches = sum(1 for symptom in selected_symptoms_lower if symptom in row_symptoms)
+        
+        # If this row has more matches than our current best, and matches all selected symptoms
+        if matches > max_matches and matches == len(selected_symptoms_lower):
+            max_matches = matches
+            if pd.notna(row['Disease']):
+                best_match = row['Disease']
+    
+    return best_match
+
+def get_possible_diseases(selected_symptoms):
+    """Get possible diseases based on selected symptoms"""
+    if not selected_symptoms:
+        return []
+    
+    possible_diseases = []
+    selected_symptoms_lower = [s.lower() for s in selected_symptoms]
+    
+    # Find rows that contain ALL selected symptoms
+    for index, row in symptom_relationships.iterrows():
+        row_symptoms = []
+        for col in ['Symptom_1', 'Symptom_2', 'Symptom_3', 'Symptom_4']:
+            if pd.notna(row[col]):
+                cleaned = clean_symptom(row[col])
+                if cleaned:
+                    row_symptoms.append(cleaned)
+        
+        # Check if this row contains all selected symptoms
+        if all(symptom in row_symptoms for symptom in selected_symptoms_lower):
+            if pd.notna(row['Disease']):
+                possible_diseases.append(row['Disease'])
+    
+    return list(set(possible_diseases))
+
 def information(predicted_dis):
+    """Extract information from datasets based on predicted disease"""
     disease_desciption = description[description['Disease'] == predicted_dis]['Description']
     disease_desciption = " ".join([w for w in disease_desciption])
 
@@ -98,17 +252,17 @@ def information(predicted_dis):
 
     return disease_desciption, disease_precautions, disease_medications, disease_diet, disease_workout
 
-# This is the function that passes the user input symptoms to our Model
 def predicted_value(patient_symptoms):
+    """Predict disease based on symptoms"""
     i_vector = np.zeros(len(symptoms_list_processed))
-    for i in patient_symptoms:
-        i_vector[symptoms_list_processed[i]] = 1
+    for symptom in patient_symptoms:
+        if symptom in symptoms_list_processed:
+            i_vector[symptoms_list_processed[symptom]] = 1
     return diseases_list[Rf.predict([i_vector])[0]]
 
-# Function to correct the spellings of the symptom (if any)
 def correct_spelling(symptom):
+    """Correct symptom spelling using fuzzy matching"""
     closest_match, score = process.extractOne(symptom, symptoms_list_processed.keys())
-    # If the similarity score is above a certain threshold, consider it a match
     if score >= 80:
         return closest_match
     else:
@@ -123,12 +277,17 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
-        user = users_collection.find_one({'email': email, 'password': password})
-        if user:
+        
+        # Find user by email
+        user = users_collection.find_one({'email': email})
+        
+        if user and user['password'] == password:  # In production, use password hashing
             session['email'] = email
-            return redirect(url_for('predict')) # Corrected to predict
+            session['username'] = user['username']  # Store both email and username
+            return redirect(url_for('predict'))
         else:
             return render_template('login.html', message='Invalid username or password')
+    
     return render_template('login.html', message=None)
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -144,151 +303,261 @@ def signup():
         if existing_user:
             return render_template("signup.html", message="Username or Email already exists!")
 
-        # Hash the password for security
-        hashed_password = generate_password_hash(password)
-
         # Insert new user into MongoDB
         users_collection.insert_one({
             "username": username,
             "email": email,
-            "password": password,
+            "password": password,  # In production, hash this password
             "created_at": datetime.now()
         })
 
-        session["username"] = username  # log in user
-        return redirect(url_for("login"))  # You may change this to your home/dashboard route
+        return redirect(url_for("login"))
 
     return render_template("signup.html", message=None)
 
-@app.route('/predict', methods=['GET', 'POST'])
-def predict(): #Corrected name to predict
-    #if 'username' not in session:
-    #  return redirect(url_for('login'))
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('home_page'))
 
-    all_symptoms = sorted(list(symptoms_list.keys())) # Get the list of symptoms for the dropdown
+@app.route('/predict', methods=['GET', 'POST'])
+def predict():
+    # Check if user is logged in
+    if 'username' not in session:
+        return redirect(url_for('login'))
+
+    if request.method == 'GET':
+        primary_symptoms = get_primary_symptoms()
+        return render_template('index.html', primary_symptoms=primary_symptoms)
 
     if request.method == 'POST':
-        selected_symptoms = request.form.getlist('symptoms') # Get a list of selected symptoms
+        # Get selected symptoms from the cascading dropdowns
+        primary_symptom = request.form.get('primary_symptom')
+        secondary_symptom = request.form.get('secondary_symptom')
+        tertiary_symptom = request.form.get('tertiary_symptom')
+        quaternary_symptom = request.form.get('quaternary_symptom')
+        
+        # Build the selected symptoms list
+        selected_symptoms = []
+        if primary_symptom and primary_symptom != '':
+            selected_symptoms.append(primary_symptom)
+        if secondary_symptom and secondary_symptom != '':
+            selected_symptoms.append(secondary_symptom)
+        if tertiary_symptom and tertiary_symptom != '':
+            selected_symptoms.append(tertiary_symptom)
+        if quaternary_symptom and quaternary_symptom != '':
+            selected_symptoms.append(quaternary_symptom)
+        
         if not selected_symptoms:
+            primary_symptoms = get_primary_symptoms()
             message = "Please select at least one symptom."
-            return render_template('index.html', message=message, all_symptoms=all_symptoms)
-        else:
-            predicted_disease = predicted_value(selected_symptoms)
+            return render_template('index.html', message=message, primary_symptoms=primary_symptoms)
+        
+        try:
+            # Get possible diseases from CSV first
+            possible_diseases = get_possible_diseases(selected_symptoms)
+            
+            # Get the best matching disease from CSV
+            csv_predicted_disease = get_best_matching_disease(selected_symptoms)
+            
+            # Use CSV prediction if available, otherwise fall back to ML model
+            if csv_predicted_disease:
+                predicted_disease = csv_predicted_disease
+                prediction_source = "CSV Database"
+            else:
+                predicted_disease = predicted_value(selected_symptoms)
+                prediction_source = "ML Model"
+            
+            # Also get ML model prediction for comparison
+            ml_predicted_disease = predicted_value(selected_symptoms)
+            
             dis_des, precautions, medications, rec_diet, workout = information(predicted_disease)
+            
+            # Process precautions
             my_precautions = []
-            for i in precautions[0]:
-                my_precautions.append(i)
-            medication_list = ast.literal_eval(medications[0])
+            if precautions and len(precautions) > 0:
+                for i in precautions[0]:
+                    if i and str(i).lower() != 'nan':  # Check if precaution is not None, empty, or 'nan'
+                        my_precautions.append(i)
+            
+            # Process medications
             medications_list = []
-            for item in medication_list:
-                medications_list.append(item)
-            diet_list = ast.literal_eval(rec_diet[0])
+            if medications and len(medications) > 0:
+                try:
+                    medication_list = ast.literal_eval(medications[0])
+                    for item in medication_list:
+                        medications_list.append(item)
+                except (ValueError, SyntaxError):
+                    # If ast.literal_eval fails, treat it as a simple string
+                    medications_list = [medications[0]]
+            
+            # Process diet
             rec_diet_list = []
-            for item in diet_list:
-                rec_diet_list.append(item)
+            if rec_diet and len(rec_diet) > 0:
+                try:
+                    diet_list = ast.literal_eval(rec_diet[0])
+                    for item in diet_list:
+                        rec_diet_list.append(item)
+                except (ValueError, SyntaxError):
+                    # If ast.literal_eval fails, treat it as a simple string
+                    rec_diet_list = [rec_diet[0]]
 
             # Store user activity
             activity_collection.insert_one({
                 'username': session['username'],
-                'timestamp': datetime.now(tz=None),
+                'email': session['email'],
+                'timestamp': datetime.now(),
                 'symptoms_input': selected_symptoms,
-                'corrected_symptoms': selected_symptoms, # No correction needed with dropdown
-                'predicted_disease': predicted_disease
+                'predicted_disease': predicted_disease,
+                'prediction_source': prediction_source,
+                'ml_predicted_disease': ml_predicted_disease,
+                'possible_diseases_from_csv': possible_diseases
             })
 
-            return render_template('index.html', symptoms=selected_symptoms, predicted_disease=predicted_disease, dis_des=dis_des,
-                                   my_precautions=my_precautions, medications=medications_list, my_diet=rec_diet_list,
-                                   workout=workout, all_symptoms=all_symptoms)
-    return render_template('index.html', all_symptoms=all_symptoms)
+            primary_symptoms = get_primary_symptoms()
+            return render_template('index.html', 
+                                 symptoms=selected_symptoms, 
+                                 predicted_disease=predicted_disease,
+                                 prediction_source=prediction_source,
+                                 ml_predicted_disease=ml_predicted_disease,
+                                 possible_diseases=possible_diseases,
+                                 dis_des=dis_des,
+                                 my_precautions=my_precautions, 
+                                 medications=medications_list, 
+                                 my_diet=rec_diet_list,
+                                 workout=workout, 
+                                 primary_symptoms=primary_symptoms,
+                                 selected_primary=primary_symptom,
+                                 selected_secondary=secondary_symptom,
+                                 selected_tertiary=tertiary_symptom,
+                                 selected_quaternary=quaternary_symptom)
+                                 
+        except Exception as e:
+            primary_symptoms = get_primary_symptoms()
+            message = f"An error occurred during prediction: {str(e)}"
+            return render_template('index.html', message=message, primary_symptoms=primary_symptoms)
+
+# AJAX routes for cascading dropdowns
+@app.route('/get_secondary_symptoms', methods=['POST'])
+def get_secondary_symptoms_ajax():
+    primary_symptom = request.json.get('primary_symptom')
+    secondary_symptoms = get_secondary_symptoms(primary_symptom)
+    return jsonify(secondary_symptoms)
+
+@app.route('/get_tertiary_symptoms', methods=['POST'])
+def get_tertiary_symptoms_ajax():
+    primary_symptom = request.json.get('primary_symptom')
+    secondary_symptom = request.json.get('secondary_symptom')
+    tertiary_symptoms = get_tertiary_symptoms(primary_symptom, secondary_symptom)
+    return jsonify(tertiary_symptoms)
+
+@app.route('/get_quaternary_symptoms', methods=['POST'])
+def get_quaternary_symptoms_ajax():
+    primary_symptom = request.json.get('primary_symptom')
+    secondary_symptom = request.json.get('secondary_symptom')
+    tertiary_symptom = request.json.get('tertiary_symptom')
+    quaternary_symptoms = get_quaternary_symptoms(primary_symptom, secondary_symptom, tertiary_symptom)
+    return jsonify(quaternary_symptoms)
+
+@app.route('/get_possible_diseases', methods=['POST'])
+def get_possible_diseases_ajax():
+    selected_symptoms = request.json.get('selected_symptoms', [])
+    possible_diseases = get_possible_diseases(selected_symptoms)
+    return jsonify(possible_diseases)
+
 @app.route('/history')
 def history():
     if 'username' not in session:
         return redirect(url_for('login'))
-    user_history = activity_collection.find({'username': session['username']}).sort('timestamp', pymongo.DESCENDING)
-    history_list = list(user_history)
-    return render_template('history.html', history=history_list)
-@app.route('/delete_history/<string:item_id>', methods=['POST'])
-def delete_history(item_id):
-    if 'username' not in session:
-        return redirect(url_for('login'))
-    try:
-        # Convert the item_id string to an ObjectId
-        object_id = ObjectId(item_id)
-        # Delete the activity from the database
-        result = activity_collection.delete_one({'_id': object_id, 'username': session['username']})
-        if result.deleted_count > 0:
-            # Optionally, you can log the successful deletion
-            print(f"Deleted activity with ID: {item_id} for user: {session['username']}")
-        else:
-            # Handle the case where the activity was not found (optional)
-            print(f"Activity with ID: {item_id} not found for user: {session['username']}")
-    except Exception as e:
-        # Handle any exceptions, such as invalid ObjectId format or database errors
-        print(f"Error deleting activity with ID: {item_id}. Error: {e}")
-        # You might want to show an error message to the user
-        # For simplicity, we'll just pass a message to the history page
-        return render_template('history.html', message="Failed to delete activity.")
-    # Redirect back to the history page after deletion
-    return redirect(url_for('history'))
-
+    
+    # Get user's prediction history
+    user_history = activity_collection.find({'username': session['username']}).sort('timestamp', -1)
+    
+    return render_template('history.html', history=user_history)
 
 @app.route('/feedback', methods=['GET', 'POST'])
 def feedback():
     if 'username' not in session:
         return redirect(url_for('login'))
+    
     if request.method == 'POST':
         feedback_text = request.form['feedback']
-        feedback_collection.insert_one({'username': session['username'], 'timestamp': datetime.now(tz=None), 'feedback': feedback_text})
-        return render_template('feedback.html', message='Feedback submitted successfully')
-    return render_template('feedback.html', message=None)
+        rating = request.form.get('rating', 0)
+        
+        feedback_collection.insert_one({
+            'username': session['username'],
+            'email': session['email'],
+            'feedback': feedback_text,
+            'rating': int(rating),
+            'timestamp': datetime.now()
+        })
+        
+        return render_template('feedback.html', message='Thank you for your feedback!')
+    
+    return render_template('feedback.html')
 
 @app.route('/download', methods=['POST'])
-def download():
-    predicted_disease = request.form['predicted_disease']
-    dis_des = request.form['dis_des']
+def download_results():
+    if 'username' not in session:
+        return redirect(url_for('login'))
+    
+    # Get form data
+    predicted_disease = request.form.get('predicted_disease', '')
+    prediction_source = request.form.get('prediction_source', '')
+    dis_des = request.form.get('dis_des', '')
     my_precautions = request.form.getlist('my_precautions')
     medications = request.form.getlist('medications')
     my_diet = request.form.getlist('my_diet')
     workout = request.form.getlist('workout')
+    
+    # Create a text report
+    report = f"""
+MEDICAL PREDICTION REPORT
+========================
 
-    # Store download activity
-    activity_collection.insert_one({
-        'username': session['username'],
-        'timestamp': datetime.now(tz=None),
-        'activity_type': 'download_results',
-        'predicted_disease': predicted_disease
-    })
+User: {session['username']}
+Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
+PREDICTED DISEASE: {predicted_disease}
+PREDICTION SOURCE: {prediction_source}
+
+DESCRIPTION:
+{dis_des}
+
+PRECAUTIONS:
+"""
+    for i, precaution in enumerate(my_precautions, 1):
+        report += f"{i}. {precaution}\n"
+    
+    report += "\nMEDICATIONS:\n"
+    for i, medication in enumerate(medications, 1):
+        report += f"{i}. {medication}\n"
+    
+    report += "\nDIET RECOMMENDATIONS:\n"
+    for i, diet in enumerate(my_diet, 1):
+        report += f"{i}. {diet}\n"
+    
+    report += "\nWORKOUT RECOMMENDATIONS:\n"
+    for i, work in enumerate(workout, 1):
+        report += f"{i}. {work}\n"
+    
+    report += """
+DISCLAIMER:
+This prediction is generated by an AI system and should not be considered as professional medical advice. 
+Please consult with a qualified healthcare professional for proper diagnosis and treatment.
+"""
+    
+    # Create a BytesIO object
     output = BytesIO()
-    output.write(f"Predicted Disease: {predicted_disease}\n\n".encode('utf-8'))
-    output.write(f"Description: {dis_des}\n\n".encode('utf-8'))
-    output.write("Precautions:\n".encode('utf-8'))
-    for precaution in my_precautions:
-        output.write(f"- {precaution}\n".encode('utf-8'))
-    output.write("\nMedications:\n".encode('utf-8'))
-    for medication in medications:
-        output.write(f"- {medication}\n".encode('utf-8'))
-    output.write("\nDiet:\n".encode('utf-8'))
-    for diet in my_diet:
-        output.write(f"- {diet}\n".encode('utf-8'))
-    output.write("\nWorkout:\n".encode('utf-8'))
-    for work in workout:
-        output.write(f"- {work}\n".encode('utf-8'))
-
+    output.write(report.encode('utf-8'))
     output.seek(0)
-    return send_file(output, as_attachment=True, download_name='result.txt', mimetype='text/plain')
-
-@app.route('/logout')
-def logout():
-    # Store logout activity
-    if 'username' in session:
-        activity_collection.insert_one({
-            'username': session['username'],
-            'timestamp': datetime.now(tz=None),
-            'activity_type': 'logout'
-        })
-        session.pop('username', None)
-    return redirect(url_for('home_page'))
+    
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f'medical_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt',
+        mimetype='text/plain'
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
